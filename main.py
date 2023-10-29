@@ -3,17 +3,14 @@ from typing import Sequence
 from datetime import datetime
 import discord
 import os
-
-from discord import Member
+import logging
+from discord import Member, Guild
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from guild_stats import GuildStats
 
 # Create a Discord client instance and set the command prefix
-intents = discord.Intents.none()
-intents.members = True
-intents.guilds = True
-intents.voice_states = True
+intents = discord.Intents.all()
 client = discord.Client(intents=intents)
 bot = commands.Bot(command_prefix='!', intents=intents)
 
@@ -24,12 +21,20 @@ guild_stats: list[GuildStats] = []
 @bot.event
 async def on_ready():
     for guild in bot.guilds:
-        player_count = count_members_in_vc(guild.members)
-        guild_stat_entry = GuildStats(guild_name=guild.name, player_count=player_count)
-        guild_stats.append(guild_stat_entry)
-        print(f"Added guild {guild_stat_entry.guild_name}")
+        if not guild_exists(guild):
+            player_count = count_members_in_vc(guild.members)
+            guild_stat_entry = GuildStats(guild_name=guild.name, player_count=player_count)
+            guild_stats.append(guild_stat_entry)
+            logging.info(f"Added guild {guild_stat_entry.guild_name}")
 
     record_player_count.start()
+
+
+def guild_exists(guild: Guild):
+    existing_guilds = [guild_stat_entry for guild_stat_entry in guild_stats if
+                       guild_stat_entry.guild_name == guild.name]
+
+    return len(existing_guilds) > 0
 
 
 def count_members_in_vc(members: Sequence[Member]):
@@ -46,13 +51,15 @@ async def on_voice_state_update(member: Member, before, after):
     entries = [entry for entry in guild_stats if entry.guild_name == member.guild.name]
 
     if len(entries) > 1:
-        print(f"Member {member.name} has more than 1 guilds")
+        logging.error(f"Member {member.name} has more than 1 guilds")
     elif len(entries) == 0:
-        print(f"Member {member.name} has 0 guilds")
+        logging.error(f"Member {member.name} has 0 guilds")
     else:
         if (before.channel is None) and (after.channel is not None):
+            logging.info(f"Adding player to {member.guild.name}")
             entries[0].add_player()
         elif (before.channel is not None) and (after.channel is None):
+            logging.info(f"Removing player from {member.guild.name}")
             entries[0].remove_player()
 
 
