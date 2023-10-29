@@ -9,6 +9,24 @@ from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from guild_stats import GuildStats
 
+logging.basicConfig()
+logging.root.setLevel(logging.NOTSET)
+
+# create logger
+logger = logging.getLogger("VC stats bot")
+# create formatter
+formatter = logging.Formatter("[%(asctime)s] [%(levelname)s]: %(message)s", "%Y-%m-%d %H:%M:%S")
+
+# create console handler and set level to debug
+ch = logging.StreamHandler()
+ch.setLevel(logging.NOTSET)
+
+# add formatter to ch
+ch.setFormatter(formatter)
+
+# add ch to logger
+logger.addHandler(ch)
+
 # Create a Discord client instance and set the command prefix
 intents = discord.Intents.all()
 client = discord.Client(intents=intents)
@@ -25,7 +43,7 @@ async def on_ready():
             player_count = count_members_in_vc(guild.members)
             guild_stat_entry = GuildStats(guild_name=guild.name, player_count=player_count)
             guild_stats.append(guild_stat_entry)
-            logging.info(f"Added guild {guild_stat_entry.guild_name}")
+            logger.info(f"Added guild {guild_stat_entry.guild_name}")
 
     record_player_count.start()
 
@@ -51,15 +69,15 @@ async def on_voice_state_update(member: Member, before, after):
     entries = [entry for entry in guild_stats if entry.guild_name == member.guild.name]
 
     if len(entries) > 1:
-        logging.error(f"Member {member.name} has more than 1 guilds")
+        logger.error(f"Member {member.name} has more than 1 guilds")
     elif len(entries) == 0:
-        logging.error(f"Member {member.name} has 0 guilds")
+        logger.error(f"Member {member.name} has 0 guilds")
     else:
         if (before.channel is None) and (after.channel is not None):
-            logging.info(f"Adding player to {member.guild.name}")
+            logger.info(f"Adding player to {member.guild.name}")
             entries[0].add_player()
         elif (before.channel is not None) and (after.channel is None):
-            logging.info(f"Removing player from {member.guild.name}")
+            logger.info(f"Removing player from {member.guild.name}")
             entries[0].remove_player()
 
 
