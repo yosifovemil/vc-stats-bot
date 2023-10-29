@@ -1,6 +1,4 @@
-# Import the required modules
 from typing import Sequence
-from datetime import datetime
 import discord
 import os
 import logging
@@ -8,23 +6,17 @@ from discord import Member, Guild
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from guild_stats import GuildStats
+import settings
+from guild_io import GuildIO
 
+# Logging setup
 logging.basicConfig()
 logging.root.setLevel(logging.NOTSET)
-
-# create logger
 logger = logging.getLogger("VC stats bot")
-# create formatter
-formatter = logging.Formatter("[%(asctime)s] [%(levelname)s]: %(message)s", "%Y-%m-%d %H:%M:%S")
-
-# create console handler and set level to debug
+formatter = logging.Formatter(settings.LOGGING_FORMAT, settings.LOGGING_TIME_FORMAT)
 ch = logging.StreamHandler()
 ch.setLevel(logging.NOTSET)
-
-# add formatter to ch
 ch.setFormatter(formatter)
-
-# add ch to logger
 logger.addHandler(ch)
 
 # Create a Discord client instance and set the command prefix
@@ -32,25 +24,25 @@ intents = discord.Intents.all()
 client = discord.Client(intents=intents)
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-guild_stats: list[GuildStats] = []
+# Keep track of all discord guilds that have added the bot
+guilds: list[GuildStats] = []
 
 
-# Set the confirmation message when the bot is ready
 @bot.event
 async def on_ready():
-    for guild in bot.guilds:
-        if not guild_exists(guild):
-            player_count = count_members_in_vc(guild.members)
-            guild_stat_entry = GuildStats(guild_name=guild.name, player_count=player_count)
-            guild_stats.append(guild_stat_entry)
-            logger.info(f"Added guild {guild_stat_entry.guild_name}")
+    for discord_guild in bot.guilds:
+        if not guild_exists(discord_guild):
+            player_count = count_members_in_vc(discord_guild.members)
+            guild_stats = GuildStats(guild_name=discord_guild.name, player_count=player_count)
 
-    record_player_count.start()
+            guilds.append(guild_stats)
+            logger.info(f"Added guild {guild_stats.guild_name}")
+
+    update.start()
 
 
 def guild_exists(guild: Guild):
-    existing_guilds = [guild_stat_entry for guild_stat_entry in guild_stats if
-                       guild_stat_entry.guild_name == guild.name]
+    existing_guilds = [guild_stats for guild_stats in guilds if guild_stats.guild_name == guild.name]
 
     return len(existing_guilds) > 0
 
@@ -66,30 +58,26 @@ def count_members_in_vc(members: Sequence[Member]):
 
 @bot.event
 async def on_voice_state_update(member: Member, before, after):
-    entries = [entry for entry in guild_stats if entry.guild_name == member.guild.name]
+    matching_guilds = [entry for entry in guilds if entry.guild_name == member.guild.name]
 
-    if len(entries) > 1:
+    if len(matching_guilds) > 1:
         logger.error(f"Member {member.name} has more than 1 guilds")
-    elif len(entries) == 0:
+    elif len(matching_guilds) == 0:
         logger.error(f"Member {member.name} has 0 guilds")
     else:
         if (before.channel is None) and (after.channel is not None):
             logger.info(f"Adding player to {member.guild.name}")
-            entries[0].add_player()
+            matching_guilds[0].add_player()
         elif (before.channel is not None) and (after.channel is None):
             logger.info(f"Removing player from {member.guild.name}")
-            entries[0].remove_player()
+            matching_guilds[0].remove_player()
 
 
-@tasks.loop(minutes=30)
-async def record_player_count():
-    timestamp = datetime.now().strftime("%H:%M:%S %d/%m/%Y")
-    for guild_entry in guild_stats:
-        player_count = guild_entry.get_player_count_max()
-
-        f = open(os.path.join("data", guild_entry.guild_name), 'a')
-        f.write(f"{timestamp},{player_count}\n")
-        f.close()
+@tasks.loop(minutes=1)
+async def update():
+    for guild_entry in guilds:
+        if guild_entry.minutes_since_update() >= settings.UPDATE_PERIOD:
+            guild_entry.write_player_count()
 
 
 # Retrieve token from the .env file
