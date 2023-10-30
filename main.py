@@ -4,10 +4,10 @@ import os
 import logging
 from discord import Member, Guild
 from discord.ext import commands, tasks
+from discord.ext.commands import Context
 from dotenv import load_dotenv
 from guild_stats import GuildStats
 import settings
-from guild_io import GuildIO
 
 # Logging setup
 logging.basicConfig()
@@ -22,10 +22,27 @@ logger.addHandler(ch)
 # Create a Discord client instance and set the command prefix
 intents = discord.Intents.all()
 client = discord.Client(intents=intents)
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='/', intents=intents)
 
 # Keep track of all discord guilds that have added the bot
 guilds: list[GuildStats] = []
+
+
+@bot.command()
+async def activity(ctx: Context):
+    matching_guilds = [g for g in guilds if g.guild_name == ctx.guild.name]
+
+    if len(matching_guilds) != 1:
+        logger.error(f"Found {len(matching_guilds)} guilds when searching for {ctx.guild.name}")
+    else:
+        guild = matching_guilds[0]
+        data = guild.guild_io.read_file()
+        data = data[data['Player count'] > 0]
+        data = data.to_markdown(index=False)
+
+        data = "```" + data + "```"
+
+        await ctx.send(data)
 
 
 @bot.event
