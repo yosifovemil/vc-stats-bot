@@ -34,10 +34,12 @@ async def activity(ctx: Context):
     logger.info(f"Activity requested from channel {ctx.channel.name}")
 
     if ctx.channel.name.find("captains-quarters") == -1:
+        logger.info("Channel is not captains-quarters")
         return
     elif len(matching_guilds) != 1:
         logger.error(f"Found {len(matching_guilds)} guilds when searching for {ctx.guild.name}")
     else:
+        logger.info("Fetching player count")
         guild = matching_guilds[0]
         data = guild.guild_io.read_file()
         data = data[data['Player count'] > 0]
