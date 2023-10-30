@@ -29,7 +29,7 @@ guilds: list[GuildStats] = []
 
 
 @bot.command()
-async def activity2(ctx: Context):
+async def activity(ctx: Context):
     matching_guilds = [g for g in guilds if g.guild_name == ctx.guild.name]
     logger.info(f"Activity requested from channel {ctx.channel.name}")
 
