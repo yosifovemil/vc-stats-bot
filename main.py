@@ -8,11 +8,14 @@ from discord.ext.commands import Context
 from dotenv import load_dotenv
 from guild_stats import GuildStats
 import settings
+import plotter
+import uuid
 
 # Logging setup
 logging.basicConfig()
-logging.root.setLevel(logging.NOTSET)
+logging.root.setLevel(logging.INFO)
 logger = logging.getLogger("VC stats bot")
+logger.setLevel(logging.NOTSET)
 formatter = logging.Formatter(settings.LOGGING_FORMAT, settings.LOGGING_TIME_FORMAT)
 ch = logging.StreamHandler()
 ch.setLevel(logging.NOTSET)
@@ -50,6 +53,28 @@ async def activity(ctx: Context):
         await ctx.send(data)
 
 
+@bot.command()
+async def plot_activity(ctx: Context):
+    matching_guilds = [g for g in guilds if g.guild_name == ctx.guild.name]
+    logger.info(f"Activity plot requested from channel {ctx.channel.name}")
+
+    if ctx.channel.name.find("captains-quarters") == -1:
+        logger.info("Channel is not captains-quarters")
+        return
+    elif len(matching_guilds) != 1:
+        logger.error(f"Found {len(matching_guilds)} guilds when searching for {ctx.guild.name}")
+    else:
+        guild = matching_guilds[0]
+        filename = os.path.join("images", str(uuid.uuid4()) + ".png")
+        plotter.plot(guild.guild_io, filename)
+        with open(filename, 'rb') as f:
+            plot = discord.File(f)
+            await ctx.send(file=plot)
+
+        f.close()
+        os.remove(filename)
+
+
 @bot.event
 async def on_ready():
     for discord_guild in bot.guilds:
@@ -59,8 +84,6 @@ async def on_ready():
 
             guilds.append(guild_stats)
             logger.info(f"Added guild {guild_stats.guild_name}")
-
-    update.start()
 
 
 def guild_exists(guild: Guild):
@@ -93,13 +116,6 @@ async def on_voice_state_update(member: Member, before, after):
         elif (before.channel is not None) and (after.channel is None):
             logger.info(f"Removing player from {member.guild.name}")
             matching_guilds[0].remove_player()
-
-
-@tasks.loop(minutes=1)
-async def update():
-    for guild_entry in guilds:
-        if guild_entry.minutes_since_update() >= settings.UPDATE_PERIOD:
-            guild_entry.write_player_count()
 
 
 # Retrieve token from the .env file
