@@ -6,6 +6,8 @@ from discord import Member, Guild
 from discord.ext import commands, tasks
 from discord.ext.commands import Context
 from dotenv import load_dotenv
+
+import util
 from guild_stats import GuildStats
 import settings
 import plotter
@@ -33,17 +35,9 @@ guilds: list[GuildStats] = []
 
 @bot.command()
 async def activity(ctx: Context):
-    matching_guilds = [g for g in guilds if g.guild_name == ctx.guild.name]
-    logger.info(f"Activity requested from channel {ctx.channel.name}")
+    guild = util.get_guild(ctx, guilds, logger)
 
-    if ctx.channel.name.find("captains-quarters") == -1:
-        logger.info("Channel is not captains-quarters")
-        return
-    elif len(matching_guilds) != 1:
-        logger.error(f"Found {len(matching_guilds)} guilds when searching for {ctx.guild.name}")
-    else:
-        logger.info("Fetching player count")
-        guild = matching_guilds[0]
+    if guild is not None:
         data = guild.guild_io.read_file()
         data = data[data['Player count'] > 0]
         data = data.to_markdown(index=False)
@@ -55,16 +49,9 @@ async def activity(ctx: Context):
 
 @bot.command()
 async def plot_activity(ctx: Context):
-    matching_guilds = [g for g in guilds if g.guild_name == ctx.guild.name]
-    logger.info(f"Activity plot requested from channel {ctx.channel.name}")
+    guild = util.get_guild(ctx, guilds, logger)
 
-    if ctx.channel.name.find("captains-quarters") == -1:
-        logger.info("Channel is not captains-quarters")
-        return
-    elif len(matching_guilds) != 1:
-        logger.error(f"Found {len(matching_guilds)} guilds when searching for {ctx.guild.name}")
-    else:
-        guild = matching_guilds[0]
+    if guild is not None:
         filename = os.path.join("images", str(uuid.uuid4()) + ".png")
         plotter.plot(guild.guild_io, filename)
         with open(filename, 'rb') as f:
@@ -78,27 +65,14 @@ async def plot_activity(ctx: Context):
 @bot.event
 async def on_ready():
     for discord_guild in bot.guilds:
-        if not guild_exists(discord_guild):
-            player_count = count_members_in_vc(discord_guild.members)
+        if not util.guild_exists(discord_guild, guilds):
+            player_count = util.count_members_in_vc(discord_guild.members)
             guild_stats = GuildStats(guild_name=discord_guild.name, player_count=player_count)
 
             guilds.append(guild_stats)
             logger.info(f"Added guild {guild_stats.guild_name}")
 
-
-def guild_exists(guild: Guild):
-    existing_guilds = [guild_stats for guild_stats in guilds if guild_stats.guild_name == guild.name]
-
-    return len(existing_guilds) > 0
-
-
-def count_members_in_vc(members: Sequence[Member]):
-    player_count = 0
-    for member in members:
-        if member.voice is not None and member.voice.channel is not None:
-            player_count += 1
-
-    return player_count
+    automatic_activity_plot.start()
 
 
 @bot.event
@@ -118,6 +92,32 @@ async def on_voice_state_update(member: Member, before, after):
             matching_guilds[0].remove_player()
 
 
-# Retrieve token from the .env file
-load_dotenv()
-bot.run(os.getenv('TOKEN'))
+@tasks.loop(hours=24)
+async def automatic_activity_plot():
+    logger.info("Posting daily activity")
+    channel_id = int(os.getenv("AUTOMATIC_CHANNEL_ID"))
+    channel = bot.get_channel(channel_id)
+    if channel is None:
+        channel = await bot.fetch_channel(channel_id)
+
+    if channel is None:
+        logger.error(f"Could not find channel with ID {channel_id}")
+    else:
+        filename = os.path.join("images", str(uuid.uuid4()) + ".png")
+        guild = util.get_guild_by_name(channel.guild.name, guilds, logger)
+        if guild is None:
+            logger.error(f"Could not find guild with name {channel.guild.name}")
+        else:
+            plotter.plot(guild.guild_io, filename)
+
+            with open(filename, 'rb') as f:
+                plot = discord.File(f)
+                await channel.send(file=plot)
+
+            f.close()
+            os.remove(filename)
+
+
+if __name__ == "__main__":
+    load_dotenv()
+    bot.run(os.getenv('TOKEN'))
