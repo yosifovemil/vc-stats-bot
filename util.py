@@ -17,7 +17,8 @@ def count_members_in_vc(members: Sequence[Member]):
 
 
 def get_guild(ctx: Context, guilds: list[GuildStats], logger: Logger):
-    channels_whitelist = map(str.strip, os.getenv("CHANNELS_WHITELIST").split(","))
+    channels_whitelist = [int(x) for x in map(str.strip, os.getenv("CHANNELS_WHITELIST").split(","))]
+    logger.info(channels_whitelist)
     if ctx.channel.id not in channels_whitelist:
         logger.warning(f"Channel {ctx.channel.name} with id {ctx.channel.id} not in whitelist.")
         return None
