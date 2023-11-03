@@ -18,17 +18,15 @@ def plot(guild_io: GuildIO, tempfile: str):
     data_wide = data.pivot_table(index='hour', columns='day', values='Player count', aggfunc=lambda x: x)
     data_wide = data_wide.set_axis(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], axis=1)
 
-    colors = ["#E0E0E0", "#F6F908", "#A3F016", "#65DE36"]
+    colors = ["#E0E0E0", "#FFFD9D", "#fefd63", "#FEFB01", "#CEFB02", "#87FA00", "#3AF901", "#00ED01"]
     color_palette = sns.color_palette(colors)
 
-    sns.heatmap(data_wide, ax=ax, linewidths=1.0, cmap=color_palette)
+    sns.heatmap(data_wide, ax=ax, linewidths=1.0, annot=True, cmap=color_palette, vmin=0, vmax=4)
     plt.savefig(tempfile, dpi=200)
 
 
 def load_data(guild_io: GuildIO):
     data = guild_io.read_file()
-    data['Date'] = data['Date'].apply(seconds_to_zero)
-    data = data.groupby(['Date'], as_index=False).max()
     data.index = data['Date']
 
     return data
@@ -37,7 +35,7 @@ def load_data(guild_io: GuildIO):
 def interpolate_readings(data):
     start = data['Date'].min()
     end = pd.Timestamp.now()
-    dates = pd.DataFrame(pd.date_range(start, end, freq="T"), columns=['Date'])
+    dates = pd.DataFrame(pd.date_range(start, end, freq="S"), columns=['Date'])
     dates.index = dates['Date']
 
     data = dates.join(data, lsuffix="_left", rsuffix="_right", how='outer')['Player count']
