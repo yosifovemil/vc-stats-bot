@@ -14,6 +14,8 @@ def plot(guild_io: GuildIO, tempfile: str):
     data = interpolate_readings(data)
     data = fill_missing_data(data)
 
+    data['Player count'] = data['Player count'].round(1)
+
     fig, ax = plt.subplots(1, 1, figsize=(7, 7))
     data_wide = data.pivot_table(index='hour', columns='day', values='Player count', aggfunc=lambda x: x)
     data_wide = data_wide.set_axis(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], axis=1)
