@@ -6,11 +6,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from datetime import datetime, timedelta
+
 days_of_week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
 def plot(guild_io: GuildIO, tempfile: str):
     data = load_data(guild_io)
+    data = get_recent_data(data)
     data = interpolate_readings(data)
     data = fill_missing_data(data)
 
@@ -32,6 +35,11 @@ def load_data(guild_io: GuildIO):
     data.index = data['Date']
 
     return data
+
+
+def get_recent_data(data: pd.DataFrame) -> pd.DataFrame:
+    threshold = datetime.now() - timedelta(days=21)
+    return data[data.Date >= threshold]
 
 
 def interpolate_readings(data):
